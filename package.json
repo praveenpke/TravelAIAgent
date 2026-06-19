@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "dev": "mastra dev",
-    "build": "mastra build"
+    "build": "mastra build",
+    "ingest": "node --env-file=.env --import tsx scripts/ingest.ts"
   },
   "dependencies": {
     "@mastra/core": "^1.43.0",
@@ -14,11 +15,13 @@
     "@mastra/libsql": "^1.13.2",
     "@mastra/loggers": "^1.1.2",
     "@mastra/memory": "^1.20.5",
+    "@mastra/rag": "^2.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
     "mastra": "^1.14.0",
+    "tsx": "^4.22.4",
     "typescript": "^6.0.3"
   }
 }

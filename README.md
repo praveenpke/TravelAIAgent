@@ -13,8 +13,9 @@ This repo is built incrementally, phase by phase. The full build plan lives in [
 | 1 | Scaffold + concierge agent + Studio | ✅ Done |
 | 2 | Tools (flights, hotels, weather, currency) — **real providers** | ✅ Done |
 | 3 | Storage + memory (history, working memory, semantic recall) | ✅ Done |
-| 4 | RAG knowledge base (destinations/visa) | ⏳ Next |
-| 5–10 | Multi-agent network, booking workflow, processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
+| 4 | RAG knowledge base (destinations/visa, with citations) | ✅ Done |
+| 5 | Booking workflow with human approval (suspend/resume) | ⏳ Next |
+| 6–10 | Multi-agent network, processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
 
 Everything you can run today is a real, working agent: no mock data — each tool calls a live API.
 
@@ -64,14 +65,17 @@ Amadeus (heavy production onboarding) and Travelpayouts (flight prices are a 48h
 
 ```
 travel-ai-agent/
+├─ knowledge/destinations.md    # RAG source: visa / safety / best-time facts
+├─ scripts/ingest.ts            # build-time: chunk + embed + upsert the KB
 ├─ src/mastra/
-│  ├─ index.ts                  # Mastra instance — registers agents + storage
-│  ├─ agents/concierge-agent.ts # the travel concierge (+ memory)
+│  ├─ index.ts                  # Mastra instance — agents + storage + vectors
+│  ├─ agents/concierge-agent.ts # the travel concierge (+ memory + RAG)
 │  ├─ storage.ts                # LibSQL store + vector singletons
 │  ├─ memory.ts                 # history + working memory + semantic recall
-│  ├─ embedder.ts               # fastembed (local, key-free)
+│  ├─ embedder.ts               # fastembed (local, key-free, 384-dim)
+│  ├─ rag/destinations-index.ts # shared KB index name
 │  ├─ schemas/                  # zod schemas (e.g. traveler profile)
-│  ├─ tools/                    # flight / hotel / weather / currency tools
+│  ├─ tools/                    # flight / hotel / weather / currency / RAG tools
 │  └─ providers/                # swappable data-source clients
 │     ├─ index.ts               #   ← the seam: swap providers here
 │     ├─ serpapi.ts             #   flights (Google Flights)
@@ -108,10 +112,19 @@ cp .env.example .env
 | `MINIMAX_API_KEY` | The concierge model (`minimax/MiniMax-M2`) | Yes |
 | `SERPAPI_KEY` | Flight search (Google Flights) | Yes (for flights) |
 | `LITE_API_KEY` | Hotel search (sandbox key starts with `sand_`) | Yes (for hotels) |
+| `DATABASE_URL` | LibSQL DB for memory + RAG | Recommended — see note |
 
 > `.env` is gitignored — never commit your keys. If a tool's key is missing it throws a clear "not configured" error rather than returning fake data.
+>
+> **`DATABASE_URL`:** set this to an **absolute** `file:` path (e.g. `file:/abs/path/travel-agent.db`) so the ingestion script and the dev server share one database. Without it, each resolves `file:./travel-agent.db` against its own working directory and they won't see each other's data.
 
-### 4. Run
+### 4. Ingest the knowledge base (for RAG)
+```bash
+pnpm ingest   # chunk + embed knowledge/destinations.md → vector index
+```
+Re-run whenever you edit `knowledge/destinations.md`. First run downloads the local embedding model once.
+
+### 5. Run
 ```bash
 pnpm dev      # starts Mastra + Studio at http://localhost:4111
 pnpm build    # production build
@@ -120,6 +133,10 @@ pnpm build    # production build
 Open **http://localhost:4111**, go to **Agents → Travel Agent Concierge**, and try:
 
 > *"Find me flights from SFO to DEN on July 13 2026, and a mid-budget hotel in Denver for 3 nights from July 13. Show the hotel total in INR."*
+
+> *"I have an Indian passport — do I need a visa for Japan, and is it safe?"* — grounded in the knowledge base, answered with a `Source:` citation (RAG).
+
+> Tell it a preference (*"I fly out of Bangalore and I'm vegetarian"*), then ask about it in a **new chat** — it remembers (working memory).
 
 Expand the tool calls or open the **Traces** tab to watch the model choose tools and see the real provider responses.
 

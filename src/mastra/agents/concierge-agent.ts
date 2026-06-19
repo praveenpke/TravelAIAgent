@@ -3,6 +3,7 @@ import { flightSearchTool } from '../tools/flight-search-tool'
 import { hotelSearchTool } from '../tools/hotel-search-tool'
 import { weatherTool } from '../tools/weather-tool'
 import { currencyTool } from '../tools/currency-tool'
+import { ragRetrievalTool } from '../tools/rag-retrieval-tool'
 import { conciergeMemory } from '../memory'
 
 export const conciergeAgent = new Agent({
@@ -29,6 +30,11 @@ export const conciergeAgent = new Agent({
     - hotelSearchTool to find hotels in a city within the traveler's budget band.
     - weatherTool to check current conditions and advise on packing.
     - currencyTool when the traveler wants prices in a currency other than USD.
+    - ragRetrievalTool ("search-destination-knowledge") for visa, entry, safety, and
+      best-time-to-visit questions. You MUST call it first for those topics and base
+      your answer ONLY on what it returns. If the knowledge base has nothing relevant,
+      say so plainly — never invent a visa rule. After using it, cite the source by
+      name (e.g. "Source: destinations.md").
     Always state the real numbers returned by the tools; never invent prices,
     visa rules, or availability. If you are unsure, say so plainly.
 
@@ -43,6 +49,7 @@ export const conciergeAgent = new Agent({
     hotelSearchTool,
     weatherTool,
     currencyTool,
+    ragRetrievalTool,
   },
   memory: conciergeMemory,
 })
