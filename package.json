@@ -1,0 +1,21 @@
+{
+  "name": "travel-agent",
+  "version": "0.1.0",
+  "description": "A multi-agent AI travel concierge built with Mastra",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "mastra dev",
+    "build": "mastra build"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.43.0",
+    "@mastra/loggers": "^1.1.2",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "mastra": "^1.14.0",
+    "typescript": "^6.0.3"
+  }
+}
