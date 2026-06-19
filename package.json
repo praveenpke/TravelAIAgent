@@ -1,7 +1,7 @@
 {
-  "name": "travel-agent",
+  "name": "travel-ai-agent",
   "version": "0.1.0",
-  "description": "A multi-agent AI travel concierge built with Mastra",
+  "description": "Travel AI Agent — a multi-agent AI travel concierge built with Mastra",
   "type": "module",
   "private": true,
   "scripts": {
