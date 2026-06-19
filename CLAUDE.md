@@ -4,7 +4,7 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 
 ## What this is
 
-**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–4 are complete (agent + real-provider tools + storage/memory + RAG knowledge base); Phase 5 (booking workflow with human approval) is next.
+**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–5 are complete (agent + real-provider tools + storage/memory + RAG + booking workflow with human approval); Phase 6 (multi-agent network: supervisor + specialists) is next.
 
 **This is not the tutorial demo.** Even though the structure mirrors `SPEC.md`, every tool calls a real API — there are no mock/placeholder implementations. Keep it that way.
 
@@ -17,6 +17,7 @@ pnpm install            # install deps
 pnpm ingest             # build-time RAG: chunk + embed knowledge/ → vector index
 pnpm dev                # Mastra dev server + Studio at http://localhost:4111
 pnpm build              # production build
+pnpm booking-demo       # drive the booking workflow's suspend/resume loop
 pnpm exec tsc --noEmit  # typecheck (run this before committing)
 ```
 
@@ -45,6 +46,11 @@ curl -s -X POST http://localhost:4111/api/tools/<tool-id>/execute \
 - **Tool I/O:** keep outputs conforming to each tool's Zod `outputSchema` so downstream phases (e.g. the booking workflow) stay stable. Adding optional fields is fine; changing existing ones is a breaking change.
 - **Errors over fakes:** if a provider key is missing or a call fails, throw a clear, actionable error. Never fall back to fabricated data.
 - **Zod `.default()` quirk:** in this Mastra version, a tool's `execute` input is typed as the *pre-default* shape, so fields with `.default()` read as possibly-undefined. Mirror the default in a destructuring default (e.g. `const { passengers = 1 } = inputData`).
+- **Structured output with MiniMax:** MiniMax M2 has no native response-format/JSON-schema support, and the tool-heavy concierge (tools + memory + RAG + reasoning tokens) breaks JSON extraction. For structured output, use `structuredOutput: { schema, jsonPromptInjection: true }` **and** a dedicated tool-free agent for the structuring pass (see `itineraryStructurer` in `workflows/booking-workflow.ts`). Don't ask the tool-heavy agent for structured output directly.
+
+## Workflows
+
+- **`src/mastra/workflows/booking-workflow.ts`** — `build → price → approve(suspend) → book`. Only `approve-if-over-budget` suspends; on resume it re-runs `execute` with `resumeData`. Each step's `outputSchema` must equal the next step's `inputSchema`. Snapshots persist to the same LibSQL DB (so a suspended run survives a restart). Registered under `workflows: { bookingWorkflow }` on the Mastra instance. Money/irreversible actions belong in a workflow step, never in an agent turn.
 
 ## Environment & secrets
 
