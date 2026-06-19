@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "mastra dev",
     "build": "mastra build",
-    "ingest": "node --env-file=.env --import tsx scripts/ingest.ts"
+    "ingest": "node --env-file=.env --import tsx scripts/ingest.ts",
+    "booking-demo": "node --env-file=.env --import tsx scripts/booking-demo.ts"
   },
   "dependencies": {
     "@mastra/core": "^1.43.0",

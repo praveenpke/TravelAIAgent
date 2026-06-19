@@ -14,8 +14,9 @@ This repo is built incrementally, phase by phase. The full build plan lives in [
 | 2 | Tools (flights, hotels, weather, currency) — **real providers** | ✅ Done |
 | 3 | Storage + memory (history, working memory, semantic recall) | ✅ Done |
 | 4 | RAG knowledge base (destinations/visa, with citations) | ✅ Done |
-| 5 | Booking workflow with human approval (suspend/resume) | ⏳ Next |
-| 6–10 | Multi-agent network, processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
+| 5 | Booking workflow with human approval (suspend/resume) | ✅ Done |
+| 6 | Multi-agent network (supervisor + specialists) | ⏳ Next |
+| 7–10 | Processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
 
 Everything you can run today is a real, working agent: no mock data — each tool calls a live API.
 
@@ -66,15 +67,18 @@ Amadeus (heavy production onboarding) and Travelpayouts (flight prices are a 48h
 ```
 travel-ai-agent/
 ├─ knowledge/destinations.md    # RAG source: visa / safety / best-time facts
-├─ scripts/ingest.ts            # build-time: chunk + embed + upsert the KB
+├─ scripts/
+│  ├─ ingest.ts                 # build-time: chunk + embed + upsert the KB
+│  └─ booking-demo.ts           # drive the booking workflow's suspend/resume loop
 ├─ src/mastra/
-│  ├─ index.ts                  # Mastra instance — agents + storage + vectors
+│  ├─ index.ts                  # Mastra instance — agents + workflows + storage + vectors
 │  ├─ agents/concierge-agent.ts # the travel concierge (+ memory + RAG)
+│  ├─ workflows/booking-workflow.ts # build → price → approve(suspend) → book
 │  ├─ storage.ts                # LibSQL store + vector singletons
 │  ├─ memory.ts                 # history + working memory + semantic recall
 │  ├─ embedder.ts               # fastembed (local, key-free, 384-dim)
 │  ├─ rag/destinations-index.ts # shared KB index name
-│  ├─ schemas/                  # zod schemas (e.g. traveler profile)
+│  ├─ schemas/                  # zod schemas (traveler profile, itinerary)
 │  ├─ tools/                    # flight / hotel / weather / currency / RAG tools
 │  └─ providers/                # swappable data-source clients
 │     ├─ index.ts               #   ← the seam: swap providers here
@@ -139,6 +143,12 @@ Open **http://localhost:4111**, go to **Agents → Travel Agent Concierge**, and
 > Tell it a preference (*"I fly out of Bangalore and I'm vegetarian"*), then ask about it in a **new chat** — it remembers (working memory).
 
 Expand the tool calls or open the **Traces** tab to watch the model choose tools and see the real provider responses.
+
+**Booking workflow (human approval):** in Studio open **Workflows → bookingWorkflow**, run it with a brief, and an over-budget trip will **suspend** for your approval before booking. Or drive it from the terminal:
+
+```bash
+pnpm booking-demo   # starts a run, pauses over budget, resumes with approval → booked
+```
 
 ---
 
