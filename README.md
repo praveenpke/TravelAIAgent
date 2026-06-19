@@ -12,8 +12,9 @@ This repo is built incrementally, phase by phase. The full build plan lives in [
 | - | - | - |
 | 1 | Scaffold + concierge agent + Studio | ✅ Done |
 | 2 | Tools (flights, hotels, weather, currency) — **real providers** | ✅ Done |
-| 3 | Storage + memory (history, working memory, semantic recall) | ⏳ Next |
-| 4–10 | RAG, multi-agent network, booking workflow, processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
+| 3 | Storage + memory (history, working memory, semantic recall) | ✅ Done |
+| 4 | RAG knowledge base (destinations/visa) | ⏳ Next |
+| 5–10 | Multi-agent network, booking workflow, processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
 
 Everything you can run today is a real, working agent: no mock data — each tool calls a live API.
 
@@ -64,8 +65,12 @@ Amadeus (heavy production onboarding) and Travelpayouts (flight prices are a 48h
 ```
 travel-ai-agent/
 ├─ src/mastra/
-│  ├─ index.ts                  # Mastra instance — registers agents
-│  ├─ agents/concierge-agent.ts # the travel concierge
+│  ├─ index.ts                  # Mastra instance — registers agents + storage
+│  ├─ agents/concierge-agent.ts # the travel concierge (+ memory)
+│  ├─ storage.ts                # LibSQL store + vector singletons
+│  ├─ memory.ts                 # history + working memory + semantic recall
+│  ├─ embedder.ts               # fastembed (local, key-free)
+│  ├─ schemas/                  # zod schemas (e.g. traveler profile)
 │  ├─ tools/                    # flight / hotel / weather / currency tools
 │  └─ providers/                # swappable data-source clients
 │     ├─ index.ts               #   ← the seam: swap providers here
