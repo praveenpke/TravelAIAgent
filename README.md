@@ -15,8 +15,9 @@ This repo is built incrementally, phase by phase. The full build plan lives in [
 | 3 | Storage + memory (history, working memory, semantic recall) | ✅ Done |
 | 4 | RAG knowledge base (destinations/visa, with citations) | ✅ Done |
 | 5 | Booking workflow with human approval (suspend/resume) | ✅ Done |
-| 6 | Multi-agent network (supervisor + specialists) | ⏳ Next |
-| 7–10 | Processors/evals, observability/voice, auth/MCP, deploy | 🗺️ Planned |
+| 6 | Multi-agent network (supervisor + specialists) | ✅ Done |
+| 7 | Processors, structured output & streaming | ⏳ Next |
+| 8–10 | Observability/voice, auth/MCP, deploy | 🗺️ Planned |
 
 Everything you can run today is a real, working agent: no mock data — each tool calls a live API.
 
@@ -25,18 +26,17 @@ Everything you can run today is a real, working agent: no mock data — each too
 ## How it works
 
 ```
-trip brief ──▶ Travel Agent Concierge (LLM) ──▶ picks tools ──▶ real providers
-                                                  │
-        ┌─────────────────────────────────────────┼───────────────────────────┐
-        ▼                     ▼                     ▼                           ▼
-  flight-search         hotel-search          get-weather               convert-currency
-   (SerpApi /            (LiteAPI)             (Open-Meteo)               (Frankfurter / ECB)
-   Google Flights)
+trip brief ──▶ Concierge (supervisor) ──┬──▶ Flights Agent     → flight-search (SerpApi) + currency
+                  │  delegates + synthesizes├──▶ Hotels Agent      → hotel-search (LiteAPI) + currency
+                  │                         └──▶ Activities Agent  → activity-search (Wikipedia) + weather + RAG
+                  └──▶ RAG tool (quick visa/entry follow-ups)
 ```
 
-- **Agent** — a single `conciergeAgent` (`src/mastra/agents/concierge-agent.ts`) with instructions, a model, and a set of tools. It decides which tool to call and with what arguments.
+- **Supervisor** — `conciergeAgent` (`src/mastra/agents/concierge-agent.ts`) reads the brief and **delegates** to specialists via the `agents` map, then synthesizes one coherent itinerary. It keeps direct RAG access for quick visa follow-ups, plus memory.
+- **Specialists** — `flightsAgent`, `hotelsAgent`, `activitiesAgent`: each a focused agent with a tight prompt and only the tools it needs.
 - **Tools** — typed `createTool` definitions (`src/mastra/tools/`). Each tool's Zod `inputSchema` is the contract the model reads, and its `execute` calls a real provider.
-- **Provider seam** — every flight/hotel call goes through `src/mastra/providers/index.ts`. Swapping a data source (SerpApi → Duffel → Amadeus → your own backend) is a one-line change there; tools and the agent never change.
+- **Provider seam** — every flight/hotel call goes through `src/mastra/providers/index.ts`. Swapping a data source (SerpApi → Duffel → Amadeus → your own backend) is a one-line change there; tools and agents never change.
+- **Booking workflow** — `bookingWorkflow` (`src/mastra/workflows/`) commits a trip through a deterministic, human-approved suspend/resume gate (agents propose, the workflow commits).
 
 ### Why these providers
 
@@ -72,14 +72,18 @@ travel-ai-agent/
 │  └─ booking-demo.ts           # drive the booking workflow's suspend/resume loop
 ├─ src/mastra/
 │  ├─ index.ts                  # Mastra instance — agents + workflows + storage + vectors
-│  ├─ agents/concierge-agent.ts # the travel concierge (+ memory + RAG)
+│  ├─ agents/                   # supervisor + specialists
+│  │  ├─ concierge-agent.ts     #   supervisor (delegates + synthesizes, + memory + RAG)
+│  │  ├─ flights-agent.ts       #   flights specialist
+│  │  ├─ hotels-agent.ts        #   hotels specialist
+│  │  └─ activities-agent.ts    #   activities specialist
 │  ├─ workflows/booking-workflow.ts # build → price → approve(suspend) → book
 │  ├─ storage.ts                # LibSQL store + vector singletons
 │  ├─ memory.ts                 # history + working memory + semantic recall
 │  ├─ embedder.ts               # fastembed (local, key-free, 384-dim)
 │  ├─ rag/destinations-index.ts # shared KB index name
 │  ├─ schemas/                  # zod schemas (traveler profile, itinerary)
-│  ├─ tools/                    # flight / hotel / weather / currency / RAG tools
+│  ├─ tools/                    # flight / hotel / weather / currency / activity / RAG tools
 │  └─ providers/                # swappable data-source clients
 │     ├─ index.ts               #   ← the seam: swap providers here
 │     ├─ serpapi.ts             #   flights (Google Flights)
@@ -148,6 +152,12 @@ Expand the tool calls or open the **Traces** tab to watch the model choose tools
 
 ```bash
 pnpm booking-demo   # starts a run, pauses over budget, resumes with approval → booked
+```
+
+**Multi-agent delegation:** ask for a full plan and the supervisor delegates to the Flights/Hotels/Activities specialists, then synthesizes one itinerary. Watch the handoffs from the terminal:
+
+```bash
+pnpm plan-trip      # logs "→ delegating to flights-agent / hotels-agent / activities-agent"
 ```
 
 ---
