@@ -4,7 +4,7 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 
 ## What this is
 
-**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–3 are complete (agent + real-provider tools + storage/memory); Phase 4 (RAG knowledge base) is next.
+**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–4 are complete (agent + real-provider tools + storage/memory + RAG knowledge base); Phase 5 (booking workflow with human approval) is next.
 
 **This is not the tutorial demo.** Even though the structure mirrors `SPEC.md`, every tool calls a real API — there are no mock/placeholder implementations. Keep it that way.
 
@@ -14,10 +14,13 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 
 ```bash
 pnpm install            # install deps
+pnpm ingest             # build-time RAG: chunk + embed knowledge/ → vector index
 pnpm dev                # Mastra dev server + Studio at http://localhost:4111
 pnpm build              # production build
 pnpm exec tsc --noEmit  # typecheck (run this before committing)
 ```
+
+> **RAG DB sharing:** `pnpm ingest` (CWD = project root) and `pnpm dev` (bundled, different CWD) must point at the **same** DB. Set `DATABASE_URL` to an absolute `file:` path in `.env`, or the ingested vectors won't be visible to the running agent. Re-run `pnpm ingest` after editing `knowledge/destinations.md`.
 
 Test a tool end-to-end without the LLM (the dev server must be running):
 
@@ -34,6 +37,7 @@ curl -s -X POST http://localhost:4111/api/tools/<tool-id>/execute \
 - **`src/mastra/agents/concierge-agent.ts`** — the single `conciergeAgent`. Model is `minimax/MiniMax-M2` via Mastra's model router. Later phases add memory, structured output, sub-agents, etc.
 - **`src/mastra/tools/`** — `createTool` definitions. The Zod `inputSchema` (and its `.describe()` text) is the contract the model reads, so keep descriptions concrete.
 - **`src/mastra/providers/`** — data-source clients. **The golden rule:** tools import flight/hotel search only from `providers/index.ts` (the seam). To change a data source, edit that one barrel file — never reach into a provider from a tool. Current mix: flights → `serpapi.ts` (Google Flights), hotels → `liteapi.ts`.
+- **RAG (Phase 4):** `knowledge/destinations.md` → `scripts/ingest.ts` (chunk + embed + upsert) → `LibSQLVector` index `destinations`. The agent queries it via `ragRetrievalTool` (`createVectorQueryTool`, resolved by the `vectors: { libsql }` key on the Mastra instance). **Footgun:** ingest and query must use the **same** embedder + dimension. We use `fastembed` (bge-small, 384-dim) on both sides — keep `EMBEDDING_DIMENSION` in `embedder.ts` in sync if you change embedders, and recreate the index.
 
 ## Conventions
 
