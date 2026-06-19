@@ -1,4 +1,4 @@
-# Travel Agent
+# Travel AI Agent
 
 A multi-agent **AI travel concierge** built on [Mastra](https://mastra.ai). Describe a trip in plain language — *"5 days in Denver in July, mid-budget, flying from SFO"* — and the agent plans it against **real** flight, hotel, weather, and currency data, then (in later phases) remembers your preferences, grounds visa answers in a knowledge base, and runs a human-approved booking workflow.
 
@@ -62,7 +62,7 @@ Amadeus (heavy production onboarding) and Travelpayouts (flight prices are a 48h
 ## Project structure
 
 ```
-travel-agent/
+travel-ai-agent/
 ├─ src/mastra/
 │  ├─ index.ts                  # Mastra instance — registers agents
 │  ├─ agents/concierge-agent.ts # the travel concierge
