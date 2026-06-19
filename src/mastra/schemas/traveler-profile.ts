@@ -7,7 +7,9 @@ export const travelerProfileSchema = z.object({
   homeAirport: z.string().optional(), // e.g. "BLR (Bangalore)"
   dietaryNeeds: z.string().optional(), // e.g. "vegetarian, no shellfish"
   budgetStyle: z.enum(['budget', 'mid', 'luxury']).optional(),
-  seatPreference: z.enum(['aisle', 'window', 'no-preference']).optional(),
+  // Free-text rather than an enum: models sometimes send "" for unknown fields,
+  // which an enum would reject and spam validation errors.
+  seatPreference: z.string().optional(), // e.g. "aisle", "window"
   passportCountry: z.string().optional(), // used later for visa/RAG questions
 })
 

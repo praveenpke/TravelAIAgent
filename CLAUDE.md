@@ -4,7 +4,7 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 
 ## What this is
 
-**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–5 are complete (agent + real-provider tools + storage/memory + RAG + booking workflow with human approval); Phase 6 (multi-agent network: supervisor + specialists) is next.
+**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–6 are complete (agent + real-provider tools + storage/memory + RAG + booking workflow + multi-agent network); Phase 7 (processors, structured output & streaming) is next.
 
 **This is not the tutorial demo.** Even though the structure mirrors `SPEC.md`, every tool calls a real API — there are no mock/placeholder implementations. Keep it that way.
 
@@ -18,6 +18,7 @@ pnpm ingest             # build-time RAG: chunk + embed knowledge/ → vector in
 pnpm dev                # Mastra dev server + Studio at http://localhost:4111
 pnpm build              # production build
 pnpm booking-demo       # drive the booking workflow's suspend/resume loop
+pnpm plan-trip          # watch the supervisor delegate to specialists
 pnpm exec tsc --noEmit  # typecheck (run this before committing)
 ```
 
@@ -35,7 +36,7 @@ curl -s -X POST http://localhost:4111/api/tools/<tool-id>/execute \
 ## Architecture
 
 - **`src/mastra/index.ts`** — the `Mastra` instance. Anything not registered here (agents, later storage/workflows) won't appear in Studio.
-- **`src/mastra/agents/concierge-agent.ts`** — the single `conciergeAgent`. Model is `minimax/MiniMax-M2` via Mastra's model router. Later phases add memory, structured output, sub-agents, etc.
+- **`src/mastra/agents/`** — a **supervisor + specialists** network (Phase 6). `conciergeAgent` is the supervisor: it holds `agents: { flightsAgent, hotelsAgent, activitiesAgent }` (delegation), keeps only `ragRetrievalTool` directly, plus memory. Specialists each have a `description` (the supervisor reads it to route), a tight prompt, and only their tools — flights: `flightSearchTool`+`currencyTool`; hotels: `hotelSearchTool`+`currencyTool`; activities: `activitySearchTool`+`weatherTool`+`ragRetrievalTool`. All four must be registered on the Mastra instance. Model is `minimax/MiniMax-M2` everywhere.
 - **`src/mastra/tools/`** — `createTool` definitions. The Zod `inputSchema` (and its `.describe()` text) is the contract the model reads, so keep descriptions concrete.
 - **`src/mastra/providers/`** — data-source clients. **The golden rule:** tools import flight/hotel search only from `providers/index.ts` (the seam). To change a data source, edit that one barrel file — never reach into a provider from a tool. Current mix: flights → `serpapi.ts` (Google Flights), hotels → `liteapi.ts`.
 - **RAG (Phase 4):** `knowledge/destinations.md` → `scripts/ingest.ts` (chunk + embed + upsert) → `LibSQLVector` index `destinations`. The agent queries it via `ragRetrievalTool` (`createVectorQueryTool`, resolved by the `vectors: { libsql }` key on the Mastra instance). **Footgun:** ingest and query must use the **same** embedder + dimension. We use `fastembed` (bge-small, 384-dim) on both sides — keep `EMBEDDING_DIMENSION` in `embedder.ts` in sync if you change embedders, and recreate the index.
