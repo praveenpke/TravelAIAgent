@@ -3,6 +3,7 @@ import { flightSearchTool } from '../tools/flight-search-tool'
 import { hotelSearchTool } from '../tools/hotel-search-tool'
 import { weatherTool } from '../tools/weather-tool'
 import { currencyTool } from '../tools/currency-tool'
+import { conciergeMemory } from '../memory'
 
 export const conciergeAgent = new Agent({
   id: 'concierge-agent',
@@ -30,6 +31,11 @@ export const conciergeAgent = new Agent({
     - currencyTool when the traveler wants prices in a currency other than USD.
     Always state the real numbers returned by the tools; never invent prices,
     visa rules, or availability. If you are unsure, say so plainly.
+
+    Whenever the traveler reveals a lasting preference — their home airport, dietary
+    needs, budget style, seat preference, or passport country — record it in working
+    memory so you never have to ask twice. Always use the stored profile to
+    personalize suggestions, and never ask for a detail you already have.
   `,
   model: 'minimax/MiniMax-M2',
   tools: {
@@ -38,4 +44,5 @@ export const conciergeAgent = new Agent({
     weatherTool,
     currencyTool,
   },
+  memory: conciergeMemory,
 })
