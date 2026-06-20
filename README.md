@@ -1,8 +1,14 @@
 # Travel AI Agent
 
-A multi-agent **AI travel concierge** built on [Mastra](https://mastra.ai). Describe a trip in plain language — *"5 days in Denver in July, mid-budget, flying from SFO"* — and the agent plans it against **real** flight, hotel, weather, and currency data, then (in later phases) remembers your preferences, grounds visa answers in a knowledge base, and runs a human-approved booking workflow.
+A multi-agent **AI travel concierge** you run in your **terminal**. Describe a trip in plain language — *"5 days in Tokyo in April, 2 adults + a 4-yo, mid-budget, love ramen & trains, from Bangalore"* — and a team of agents researches **real** flights, hotels, and activities, asks what it needs, optimizes for **best experience per dollar** (not just cheapest), respects real-life constraints like kids' pacing, and hands you a clean **itinerary file** (Markdown or HTML) you can book from yourself.
 
-This repo is built incrementally, phase by phase. The full build plan lives in [`SPEC.md`](./SPEC.md).
+It plans; it doesn't book — you keep control of the money.
+
+```bash
+pnpm plan
+```
+
+This repo was built incrementally on [Mastra](https://mastra.ai); the original phase-by-phase plan lives in [`SPEC.md`](./SPEC.md). The project has since pivoted to a **plan-only terminal agent** — the spec's human-approval *booking* workflow was intentionally removed to focus on planning quality.
 
 ---
 
@@ -14,10 +20,10 @@ This repo is built incrementally, phase by phase. The full build plan lives in [
 | 2 | Tools (flights, hotels, weather, currency) — **real providers** | ✅ Done |
 | 3 | Storage + memory (history, working memory, semantic recall) | ✅ Done |
 | 4 | RAG knowledge base (destinations/visa, with citations) | ✅ Done |
-| 5 | Booking workflow with human approval (suspend/resume) | ✅ Done |
+| 5 | ~~Booking workflow~~ | ➖ Removed (pivoted to plan-only) |
 | 6 | Multi-agent network (supervisor + specialists) | ✅ Done |
-| 7 | Processors, structured output & streaming | ⏳ Next |
-| 8–10 | Observability/voice, auth/MCP, deploy | 🗺️ Planned |
+| — | **Terminal planner** (`pnpm plan`) + itinerary file output (md/html) | ✅ Done |
+| next | Sharpening the agent: questions, value reasoning, real-data reliability | 🔨 In progress |
 
 Everything you can run today is a real, working agent: no mock data — each tool calls a live API.
 
@@ -36,7 +42,7 @@ trip brief ──▶ Concierge (supervisor) ──┬──▶ Flights Agent    
 - **Specialists** — `flightsAgent`, `hotelsAgent`, `activitiesAgent`: each a focused agent with a tight prompt and only the tools it needs.
 - **Tools** — typed `createTool` definitions (`src/mastra/tools/`). Each tool's Zod `inputSchema` is the contract the model reads, and its `execute` calls a real provider.
 - **Provider seam** — every flight/hotel call goes through `src/mastra/providers/index.ts`. Swapping a data source (SerpApi → Duffel → Amadeus → your own backend) is a one-line change there; tools and agents never change.
-- **Booking workflow** — `bookingWorkflow` (`src/mastra/workflows/`) commits a trip through a deterministic, human-approved suspend/resume gate (agents propose, the workflow commits).
+- **Terminal CLI** — `src/cli.ts` (`pnpm plan`) is a streaming chat loop; on `/save` it asks the agent for a final plan and writes it to `trips/` as Markdown or HTML (`src/output/save-plan.ts`).
 
 ### Why these providers
 
@@ -68,16 +74,17 @@ Amadeus (heavy production onboarding) and Travelpayouts (flight prices are a 48h
 travel-ai-agent/
 ├─ knowledge/destinations.md    # RAG source: visa / safety / best-time facts
 ├─ scripts/
-│  ├─ ingest.ts                 # build-time: chunk + embed + upsert the KB
-│  └─ booking-demo.ts           # drive the booking workflow's suspend/resume loop
-├─ src/mastra/
-│  ├─ index.ts                  # Mastra instance — agents + workflows + storage + vectors
+│  └─ ingest.ts                 # build-time: chunk + embed + upsert the KB
+├─ src/
+│  ├─ cli.ts                    # the terminal planner (pnpm plan)
+│  ├─ output/save-plan.ts       # render the plan → trips/*.md or *.html
+│  └─ mastra/
+│  ├─ index.ts                  # Mastra instance — agents + storage + vectors
 │  ├─ agents/                   # supervisor + specialists
 │  │  ├─ concierge-agent.ts     #   supervisor (delegates + synthesizes, + memory + RAG)
 │  │  ├─ flights-agent.ts       #   flights specialist
 │  │  ├─ hotels-agent.ts        #   hotels specialist
 │  │  └─ activities-agent.ts    #   activities specialist
-│  ├─ workflows/booking-workflow.ts # build → price → approve(suspend) → book
 │  ├─ storage.ts                # LibSQL store + vector singletons
 │  ├─ memory.ts                 # history + working memory + semantic recall
 │  ├─ embedder.ts               # fastembed (local, key-free, 384-dim)
@@ -132,39 +139,34 @@ pnpm ingest   # chunk + embed knowledge/destinations.md → vector index
 ```
 Re-run whenever you edit `knowledge/destinations.md`. First run downloads the local embedding model once.
 
-### 5. Run
+### 5. Plan a trip (the main way to use it)
 ```bash
-pnpm dev      # starts Mastra + Studio at http://localhost:4111
-pnpm build    # production build
+pnpm plan
+```
+A streaming chat in your terminal. Tell it about your trip; it asks what it needs, researches real options, and reasons about value. When you're happy, save the itinerary:
+
+```
+you ▸ 5 days in Tokyo in April, 2 adults + a 4-yo, mid-budget, love ramen & trains, from Bangalore
+agent ▸ … (asks for exact dates, then researches flights/hotels/activities) …
+you ▸ /save          # writes trips/<trip>.md
+you ▸ /save html     # writes a styled trips/<trip>.html instead
+you ▸ /exit
 ```
 
-Open **http://localhost:4111**, go to **Agents → Travel Agent Concierge**, and try:
+Commands: `/save` · `/save html` · `/reset` (new trip) · `/help` · `/exit`. Generated plans land in `trips/` (gitignored).
 
-> *"Find me flights from SFO to DEN on July 13 2026, and a mid-budget hotel in Denver for 3 nights from July 13. Show the hotel total in INR."*
-
-> *"I have an Indian passport — do I need a visa for Japan, and is it safe?"* — grounded in the knowledge base, answered with a `Source:` citation (RAG).
-
-> Tell it a preference (*"I fly out of Bangalore and I'm vegetarian"*), then ask about it in a **new chat** — it remembers (working memory).
-
-Expand the tool calls or open the **Traces** tab to watch the model choose tools and see the real provider responses.
-
-**Booking workflow (human approval):** in Studio open **Workflows → bookingWorkflow**, run it with a brief, and an over-budget trip will **suspend** for your approval before booking. Or drive it from the terminal:
-
+### Inspect / debug (optional)
 ```bash
-pnpm booking-demo   # starts a run, pauses over budget, resumes with approval → booked
-```
-
-**Multi-agent delegation:** ask for a full plan and the supervisor delegates to the Flights/Hotels/Activities specialists, then synthesizes one itinerary. Watch the handoffs from the terminal:
-
-```bash
-pnpm plan-trip      # logs "→ delegating to flights-agent / hotels-agent / activities-agent"
+pnpm dev        # Mastra Studio at http://localhost:4111 — inspect agents, tools, memory, traces
+pnpm plan-trip  # one-shot demo: logs "→ delegating to flights-agent / hotels-agent / activities-agent"
+pnpm build      # production build
 ```
 
 ---
 
 ## Roadmap
 
-The project follows the 10-phase plan in [`SPEC.md`](./SPEC.md): storage & memory → RAG knowledge base → multi-agent network → booking workflow with human approval → processors & evals → observability & voice → auth, client & MCP → deploy.
+The agent's foundations follow the early phases of [`SPEC.md`](./SPEC.md) (tools → memory → RAG → multi-agent). Current focus is **sharpening the agent itself**: asking the right questions, reasoning about value, and reliable real-data planning. Booking is deliberately out of scope (the agent hands you a plan to book yourself).
 
 ---
 

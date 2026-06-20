@@ -4,9 +4,11 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 
 ## What this is
 
-**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge built on [Mastra](https://mastra.ai). It is built incrementally following the 10-phase plan in [`SPEC.md`](./SPEC.md). Phases 1–6 are complete (agent + real-provider tools + storage/memory + RAG + booking workflow + multi-agent network); Phase 7 (processors, structured output & streaming) is next.
+**Travel AI Agent** (`travel-ai-agent`) is a **production** multi-agent AI travel concierge that runs in the **terminal** (`pnpm plan`). It researches real flights/hotels/activities, reasons about value (best experience per dollar, not just cheapest), respects real-life constraints (kids' pacing, etc.), and outputs an itinerary file (md/html) the user books themselves. **It plans; it does not book.**
 
-**This is not the tutorial demo.** Even though the structure mirrors `SPEC.md`, every tool calls a real API — there are no mock/placeholder implementations. Keep it that way.
+Built on [Mastra](https://mastra.ai). It grew through the early phases of [`SPEC.md`](./SPEC.md) (tools → memory → RAG → multi-agent), then **pivoted to a plan-only terminal agent** — the spec's booking workflow (Phase 5) was intentionally **removed**. SPEC.md is now historical context, not the current target. Current focus: **sharpening the agent** (questions, value reasoning, real-data reliability).
+
+**This is not the tutorial demo.** Every tool calls a real API — there are no mock/placeholder implementations. Keep it that way.
 
 ## Commands
 
@@ -15,10 +17,10 @@ Guidance for Claude Code (and other AI agents) working in this repository.
 ```bash
 pnpm install            # install deps
 pnpm ingest             # build-time RAG: chunk + embed knowledge/ → vector index
-pnpm dev                # Mastra dev server + Studio at http://localhost:4111
+pnpm plan               # the terminal planner (main entrypoint) — src/cli.ts
+pnpm dev                # Mastra dev server + Studio at http://localhost:4111 (inspect/debug)
 pnpm build              # production build
-pnpm booking-demo       # drive the booking workflow's suspend/resume loop
-pnpm plan-trip          # watch the supervisor delegate to specialists
+pnpm plan-trip          # one-shot demo: watch the supervisor delegate to specialists
 pnpm exec tsc --noEmit  # typecheck (run this before committing)
 ```
 
@@ -35,7 +37,8 @@ curl -s -X POST http://localhost:4111/api/tools/<tool-id>/execute \
 
 ## Architecture
 
-- **`src/mastra/index.ts`** — the `Mastra` instance. Anything not registered here (agents, later storage/workflows) won't appear in Studio.
+- **`src/cli.ts`** — the terminal planner (`pnpm plan`): a streaming chat loop over `conciergeAgent` with a per-session memory thread; commands `/save [html]`, `/reset`, `/exit`. `/save` asks the agent for a final Markdown plan and writes it via `src/output/save-plan.ts` (md, or html via `marked`) into `trips/` (gitignored).
+- **`src/mastra/index.ts`** — the `Mastra` instance. Anything not registered here won't appear in Studio.
 - **`src/mastra/agents/`** — a **supervisor + specialists** network (Phase 6). `conciergeAgent` is the supervisor: it holds `agents: { flightsAgent, hotelsAgent, activitiesAgent }` (delegation), keeps only `ragRetrievalTool` directly, plus memory. Specialists each have a `description` (the supervisor reads it to route), a tight prompt, and only their tools — flights: `flightSearchTool`+`currencyTool`; hotels: `hotelSearchTool`+`currencyTool`; activities: `activitySearchTool`+`weatherTool`+`ragRetrievalTool`. All four must be registered on the Mastra instance. Model is `minimax/MiniMax-M2` everywhere.
 - **`src/mastra/tools/`** — `createTool` definitions. The Zod `inputSchema` (and its `.describe()` text) is the contract the model reads, so keep descriptions concrete.
 - **`src/mastra/providers/`** — data-source clients. **The golden rule:** tools import flight/hotel search only from `providers/index.ts` (the seam). To change a data source, edit that one barrel file — never reach into a provider from a tool. Current mix: flights → `serpapi.ts` (Google Flights), hotels → `liteapi.ts`.
@@ -44,14 +47,14 @@ curl -s -X POST http://localhost:4111/api/tools/<tool-id>/execute \
 ## Conventions
 
 - **Code style:** TypeScript, 2-space indent, **single quotes, no semicolons**, arrow functions. Match the surrounding files.
-- **Tool I/O:** keep outputs conforming to each tool's Zod `outputSchema` so downstream phases (e.g. the booking workflow) stay stable. Adding optional fields is fine; changing existing ones is a breaking change.
-- **Errors over fakes:** if a provider key is missing or a call fails, throw a clear, actionable error. Never fall back to fabricated data.
+- **Tool I/O:** keep outputs conforming to each tool's Zod `outputSchema` so callers stay stable. Adding optional fields is fine; changing existing ones is a breaking change.
+- **Errors over fakes:** if a provider key is missing or a call fails, throw a clear, actionable error. Never fall back to fabricated data. (The agent should say "live search was unavailable" rather than invent prices.)
 - **Zod `.default()` quirk:** in this Mastra version, a tool's `execute` input is typed as the *pre-default* shape, so fields with `.default()` read as possibly-undefined. Mirror the default in a destructuring default (e.g. `const { passengers = 1 } = inputData`).
-- **Structured output with MiniMax:** MiniMax M2 has no native response-format/JSON-schema support, and the tool-heavy concierge (tools + memory + RAG + reasoning tokens) breaks JSON extraction. For structured output, use `structuredOutput: { schema, jsonPromptInjection: true }` **and** a dedicated tool-free agent for the structuring pass (see `itineraryStructurer` in `workflows/booking-workflow.ts`). Don't ask the tool-heavy agent for structured output directly.
+- **Plan output is Markdown, not structured JSON.** The final plan is the agent's Markdown (the CLI writes it to a file). We deliberately do **not** force a big structured object out of MiniMax — it has no native JSON-schema support and the tool-heavy concierge breaks extraction. (If you ever need structured output, use `structuredOutput: { schema, jsonPromptInjection: true }` with a dedicated tool-free agent.)
 
-## Workflows
+## The agent is the product
 
-- **`src/mastra/workflows/booking-workflow.ts`** — `build → price → approve(suspend) → book`. Only `approve-if-over-budget` suspends; on resume it re-runs `execute` with `resumeData`. Each step's `outputSchema` must equal the next step's `inputSchema`. Snapshots persist to the same LibSQL DB (so a suspended run survives a restart). Registered under `workflows: { bookingWorkflow }` on the Mastra instance. Money/irreversible actions belong in a workflow step, never in an agent turn.
+Current focus is making `conciergeAgent` (the supervisor) **think and ask well**, not adding features. When changing it, optimize for: asking the single most-important missing question first (don't interrogate); reasoning about value/trade-offs (not just cheapest); respecting kids' pacing & real constraints; using real specialist data and being honest when it's unavailable; and producing a clean, actionable final plan. Test changes via `pnpm plan`.
 
 ## Environment & secrets
 
