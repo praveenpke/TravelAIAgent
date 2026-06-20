@@ -3,6 +3,8 @@
 > How a future travel AI agent should look and feel — designed to erase the real gaps travelers hit (tab fatigue, value-for-money doubt, kid timing, decision paralysis, trust) — plus a **paste-ready prompt to generate the mockups in Claude design**.
 >
 > **Part 1** is the prompt you run. **Part 2** is the vision/spec behind it.
+>
+> ⚠️ **Scope note (2026-06-20).** The product has pivoted to a **plan-only terminal agent** (`pnpm plan`) that outputs an itinerary file you book yourself — it does **not** book. So the **Booking Approval** screen, the `ApprovalCard`/`ConfirmationCard` components, and the "nothing commits until you approve" booking principle in this doc are **out of scope** — skip them. Everything else (the planning desk, live agents, value-per-buck, the kid-aware timeline, why-this/source chips) still reflects the intent.
 
 ---
 

@@ -1,5 +1,7 @@
 # Travel AI Agent — Frontend, Backend & Deployment Architecture
 
+> ⚠️ **Scope note (2026-06-20).** The project has since pivoted to a **plan-only terminal agent** (`pnpm plan`) — see [`README.md`](./README.md) and [`CLAUDE.md`](./CLAUDE.md) for the current shape. The **booking / human-approval workflow** described throughout this document has been **removed from the codebase** and is **out of scope**. There is **no web UI being built right now**. Treat this document as an aspirational reference for *if/when* a UI is added — and ignore every booking / approval / suspend-resume section, which no longer reflects the code. The Mastra agent, provider seam, memory, RAG, and the LibSQL→Turso deployment guidance still apply.
+
 ## Executive Summary
 
 Travel AI Agent is a production multi-agent travel concierge built on **Mastra** (`@mastra/core`, TypeScript, Node ≥22.13, pnpm). The backend is complete through **Phase 6**: a supervisor `conciergeAgent` that delegates to three specialists (flights/hotels/activities), a tool layer behind a one-line provider seam, Memory (history + working memory + semantic recall) and RAG over a single LibSQL store, and a `bookingWorkflow` with a human-approval **suspend/resume** gate. It runs today only on `mastra dev` (Studio + HTTP API on `:4111`) against a local `file:./travel-agent.db` — there is **no UI**.
